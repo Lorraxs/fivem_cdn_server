@@ -3,6 +3,7 @@ package controllers
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"image/png"
 	"io"
@@ -24,6 +25,18 @@ type ImageFile struct {
 	Bytes    []byte
 }
 
+type BufferPayload struct {
+	Name  string `json:"name"`
+	Bytes []byte `json:"bytes"`
+}
+
+type UploadResponse struct {
+	Success  bool   `json:"success"`
+	Message  string `json:"message"`
+	FileName string `json:"fileName"`
+	Url      string `json:"url"`
+}
+
 type UploadController struct {
 	ctx    context.Context
 	Router *mux.Router
@@ -39,6 +52,15 @@ func (c *UploadController) Init(ctx context.Context, router *mux.Router) {
 	c.Router = router
 	c.Config = config.GetConfig()
 	c.Router.HandleFunc("/upload", c.Upload).Methods("POST")
+	c.Router.HandleFunc("/upload-buffer", c.UploadBuffer).Methods("POST")
+	c.Router.HandleFunc("/static/{file}", c.GetStaticFile).Methods("GET")
+}
+
+func (c *UploadController) GetStaticFile(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	file := vars["file"]
+	filePath := path.Join(c.Config.App.UploadPath, file)
+	http.ServeFile(w, r, filePath)
 }
 
 func removedExt(f string) string {
@@ -64,6 +86,13 @@ func (c *UploadController) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer f.Close()
+
+	response := UploadResponse{
+		Success:  true,
+		FileName: h.Filename,
+		Message:  "File uploaded successfully",
+		Url:      path.Join(c.Config.App.BaseUrl, "static", h.Filename),
+	}
 
 	ext := strings.ToLower(filepath.Ext(h.Filename))
 	switch ext {
@@ -103,6 +132,7 @@ func (c *UploadController) Upload(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, errStr, http.StatusInternalServerError)
 			return
 		}
+		response.Url = path.Join(c.Config.App.BaseUrl, "static", strings.TrimSuffix(h.Filename, ext)+".webp")
 
 	case ".webp", ".jpg", ".jpeg":
 		// Save the file directly
@@ -136,5 +166,71 @@ func (c *UploadController) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("File uploaded successfully"))
+	json.NewEncoder(w).Encode(response)
+
+}
+
+func (c *UploadController) UploadBuffer(w http.ResponseWriter, r *http.Request) {
+	// max total size 20mb
+	r.Body = http.MaxBytesReader(w, r.Body, 20<<20)
+
+	secret := r.Header.Get("Secret")
+
+	if secret != c.Config.App.Secret {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	fmt.Printf("Body: %s\n", r.Body)
+
+	fileName := r.Header.Get("FileName")
+
+	ext := strings.ToLower(filepath.Ext(fileName))
+
+	response := UploadResponse{
+		Success:  true,
+		FileName: fileName,
+		Message:  "File uploaded successfully",
+		Url:      path.Join(c.Config.App.BaseUrl, "static", fileName),
+	}
+
+	// Decode the PNG image
+	img, err := png.Decode(r.Body)
+	if err != nil {
+		errStr := fmt.Sprintf("Error decoding the PNG file. Reason: %s\n", err)
+		fmt.Println(errStr)
+		http.Error(w, errStr, http.StatusInternalServerError)
+		return
+	}
+
+	// Create the WebP file
+	webpFilePath := path.Join(c.Config.App.UploadPath, strings.TrimSuffix(fileName, ext)+".webp")
+	webpFile, err := os.Create(webpFilePath)
+	if err != nil {
+		errStr := fmt.Sprintf("Error in creating the WebP file. Reason: %s\n", err)
+		fmt.Println(errStr)
+		http.Error(w, errStr, http.StatusInternalServerError)
+		return
+	}
+	defer webpFile.Close()
+
+	// Encode the image to WebP format and save it
+	var buf bytes.Buffer
+	if err := webp.Encode(&buf, img, nil); err != nil {
+		errStr := fmt.Sprintf("Error encoding the image to WebP format. Reason: %s\n", err)
+		fmt.Println(errStr)
+		http.Error(w, errStr, http.StatusInternalServerError)
+		return
+	}
+
+	if _, err := webpFile.Write(buf.Bytes()); err != nil {
+		errStr := fmt.Sprintf("Error writing the WebP file. Reason: %s\n", err)
+		fmt.Println(errStr)
+		http.Error(w, errStr, http.StatusInternalServerError)
+		return
+	}
+	response.Url = path.Join(c.Config.App.BaseUrl, "static", strings.TrimSuffix(fileName, ext)+".webp")
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
 }
