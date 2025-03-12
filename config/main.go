@@ -83,7 +83,7 @@ func checkConfig(iniData *ini.File) *Config {
 		}
 	}
 	if config.App.BaseUrl == "" {
-		config.App.BaseUrl = "https://cdn.haimomgta5.vn"
+		config.App.BaseUrl = "https://cdn.lorax.vn"
 		_, err = appSection.NewKey("baseUrl", config.App.BaseUrl)
 		if err != nil {
 			panic(err)
