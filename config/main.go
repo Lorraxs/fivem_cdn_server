@@ -9,6 +9,7 @@ import (
 type AppSection struct {
 	Secret     string `json:"secret"`
 	UploadPath string `json:"uploadPath"`
+	BaseUrl    string `json:"baseUrl"`
 }
 
 type HttpSection struct {
@@ -41,7 +42,9 @@ func loadConfig() *Config {
 	appSection := iniData.Section("app")
 	httpSection := iniData.Section("http")
 	config.App = AppSection{
-		Secret: appSection.Key("secret").String(),
+		Secret:     appSection.Key("secret").String(),
+		UploadPath: appSection.Key("uploadPath").String(),
+		BaseUrl:    appSection.Key("baseUrl").String(),
 	}
 	config.Http = HttpSection{
 		Port: httpSection.Key("port").String(),
@@ -75,6 +78,13 @@ func checkConfig(iniData *ini.File) *Config {
 	if config.App.UploadPath == "" {
 		config.App.UploadPath = "uploads"
 		_, err = appSection.NewKey("uploadPath", "uploads")
+		if err != nil {
+			panic(err)
+		}
+	}
+	if config.App.BaseUrl == "" {
+		config.App.BaseUrl = "https://cdn.haimomgta5.vn"
+		_, err = appSection.NewKey("baseUrl", config.App.BaseUrl)
 		if err != nil {
 			panic(err)
 		}
