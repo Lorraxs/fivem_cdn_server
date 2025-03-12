@@ -1,7 +1,7 @@
 builds:
   - id: darwin-amd64
     main: ./
-    binary: golang-cross
+    binary: "{{ .ProjectName }}_{{ .Version }}"
     goos:
       - darwin
     goarch:
@@ -17,7 +17,7 @@ builds:
       - -s -w -X main.version={{.Version}}
   - id: linux-armhf
     main: ./
-    binary: golang-cross
+    binary: "{{ .ProjectName }}_{{ .Version }}"
     goos:
       - linux
     goarch:
@@ -31,6 +31,19 @@ builds:
       - CGO_LDFLAGS=--sysroot=/sysroot/linux/armhf
       - PKG_CONFIG_SYSROOT_DIR=/sysroot/linux/armhf
       - PKG_CONFIG_PATH=/sysroot/linux/armhf/opt/vc/lib/pkgconfig:/sysroot/linux/armhf/usr/lib/arm-linux-gnueabihf/pkgconfig:/sysroot/linux/armhf/usr/lib/pkgconfig:/sysroot/linux/armhf/usr/local/lib/pkgconfig
+    flags:
+      - -mod=readonly
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+  - id: windows-amd64
+    main: ./
+    binary: "{{ .ProjectName }}_{{ .Version }}.exe"
+    goos:
+      - windows
+    goarch:
+      - amd64
+    env:
+      - CGO_ENABLED=1
     flags:
       - -mod=readonly
     ldflags:
