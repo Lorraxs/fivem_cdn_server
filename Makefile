@@ -1,5 +1,5 @@
 PACKAGE_NAME          := github.com/Lorraxs/fivem_cdn_server
-GOLANG_CROSS_VERSION  ?= v1.19.5
+GOLANG_CROSS_VERSION  ?= v1.21.5
 
 SYSROOT_DIR     ?= sysroots
 SYSROOT_ARCHIVE ?= sysroots.tar.bz2
