@@ -5,8 +5,6 @@ builds:
       - windows
     goarch:
       - amd64
-    env:
-      - CGO_ENABLED=1
   - id: linux
     goos:
       - linux
