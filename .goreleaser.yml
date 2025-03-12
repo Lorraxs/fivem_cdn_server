@@ -1,9 +1,14 @@
 version: 2
 builds:
-  - env:
-      - CGO_ENABLED=1
+  - id: windows
     goos:
-      - linux
       - windows
     goarch:
-        - amd64
+      - amd64
+    env:
+      - CGO_ENABLED=1
+  - id: linux
+    goos:
+      - linux
+    goarch:
+      - amd64
