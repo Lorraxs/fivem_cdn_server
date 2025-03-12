@@ -1,1 +1,3 @@
 uploads
+.release-env
+dist/
