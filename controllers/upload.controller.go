@@ -37,6 +37,33 @@ type UploadResponse struct {
 	Url      string `json:"url"`
 }
 
+type UploadManifestCollectionItemTexture struct {
+	TextureId string `json:"textureId"`
+	Name      string `json:"name"`
+	Url       string `json:"url"`
+}
+
+type UploadManifestCollectionItem struct {
+	CollectionName string                                `json:"collectionName"`
+	Gender         string                                `json:"gender"`
+	ComponentType  string                                `json:"componentType"`
+	ComponentId    string                                `json:"componentId"`
+	DrawableId     string                                `json:"drawableId"`
+	Name           string                                `json:"name"`
+	Url            string                                `json:"url"`
+	Textures       []UploadManifestCollectionItemTexture `json:"textures"`
+}
+
+type UploadManifestCollection struct {
+	CollectionName string                         `json:"collectionName"`
+	Items          []UploadManifestCollectionItem `json:"items"`
+}
+
+type UploadManifestResponse struct {
+	CollectionNum int                        `json:"collectionNum"`
+	Collections   []UploadManifestCollection `json:"collections"`
+}
+
 type UploadController struct {
 	ctx    context.Context
 	Router *mux.Router
@@ -51,9 +78,116 @@ func (c *UploadController) Init(ctx context.Context, router *mux.Router) {
 	c.ctx = ctx
 	c.Router = router
 	c.Config = config.GetConfig()
+	c.Router.HandleFunc("/static/{file}", c.DeleteStaticFile).Methods("DELETE")
 	c.Router.HandleFunc("/upload", c.Upload).Methods("POST")
+	c.Router.HandleFunc("/upload/manifest", c.GetUploadManifest).Methods("GET")
 	c.Router.HandleFunc("/upload-buffer", c.UploadBuffer).Methods("POST")
 	c.Router.HandleFunc("/static/{file}", c.GetStaticFile).Methods("GET")
+}
+
+func (c *UploadController) GetUploadManifest(w http.ResponseWriter, r *http.Request) {
+	response := UploadManifestResponse{
+		CollectionNum: 0,
+		Collections:   []UploadManifestCollection{},
+	}
+
+	files, err := os.ReadDir(c.Config.App.UploadPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+		// filename Male_Apt01_male_component_11_6_1.webp
+
+		ext := strings.ToLower(filepath.Ext(file.Name()))
+		if ext != ".webp" {
+			continue
+		}
+		// Get the file name without the extension
+		name := removedExt(file.Name())
+
+		// Split the file name into parts
+		parts := strings.Split(name, "_")
+		if len(parts) < 5 {
+			continue
+		}
+
+		textureId := parts[len(parts)-1]
+		drawableId := parts[len(parts)-2]
+		componentId := parts[len(parts)-3]
+		componentType := parts[len(parts)-4]
+		gender := parts[len(parts)-5]
+		collectionName := strings.Join(parts[:len(parts)-5], "_")
+
+		// Check if the collection already exists
+		var collection *UploadManifestCollection
+		for i := range response.Collections {
+			if response.Collections[i].CollectionName == collectionName {
+				collection = &response.Collections[i]
+				break
+			}
+		}
+
+		if collection == nil {
+			collection = &UploadManifestCollection{
+				CollectionName: collectionName,
+				Items:          []UploadManifestCollectionItem{},
+			}
+			response.Collections = append(response.Collections, *collection)
+			response.CollectionNum++
+		}
+
+		/* item := UploadManifestCollectionItem{
+			CollectionName: collectionName,
+			Gender:         gender,
+			ComponentType:  componentType,
+			ComponentId:    componentId,
+			DrawableId:     drawableId,
+			TextureId:      textureId,
+			Name:           name,
+			Url:            path.Join(c.Config.App.BaseUrl, "static", file.Name()),
+		}
+
+		collection.Items = append(collection.Items, item) */
+
+		// Check if the item already exists
+		var item *UploadManifestCollectionItem
+		for i := range collection.Items {
+			if collection.Items[i].ComponentId == componentId && collection.Items[i].DrawableId == drawableId && collection.Items[i].Gender == gender {
+				item = &collection.Items[i]
+				break
+			}
+		}
+
+		if item == nil {
+			item = &UploadManifestCollectionItem{
+				CollectionName: collectionName,
+				Gender:         gender,
+				ComponentType:  componentType,
+				ComponentId:    componentId,
+				DrawableId:     drawableId,
+				Name:           name,
+				Url:            path.Join(c.Config.App.BaseUrl, "static", file.Name()),
+				Textures:       []UploadManifestCollectionItemTexture{},
+			}
+			collection.Items = append(collection.Items, *item)
+		}
+
+		texture := UploadManifestCollectionItemTexture{
+			TextureId: textureId,
+			Name:      name,
+			Url:       path.Join(c.Config.App.BaseUrl, "static", file.Name()),
+		}
+
+		item.Textures = append(item.Textures, texture)
+
+	}
+
+	json.NewEncoder(w).Encode(response)
 }
 
 func (c *UploadController) GetStaticFile(w http.ResponseWriter, r *http.Request) {
@@ -61,6 +195,23 @@ func (c *UploadController) GetStaticFile(w http.ResponseWriter, r *http.Request)
 	file := vars["file"]
 	filePath := path.Join(c.Config.App.UploadPath, file)
 	http.ServeFile(w, r, filePath)
+}
+
+func (c *UploadController) DeleteStaticFile(w http.ResponseWriter, r *http.Request) {
+	secret := r.Header.Get("Secret")
+	if secret != c.Config.App.Secret {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	vars := mux.Vars(r)
+	file := vars["file"]
+	filePath := path.Join(c.Config.App.UploadPath, file)
+	err := os.Remove(filePath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func removedExt(f string) string {
