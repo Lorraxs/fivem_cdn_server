@@ -7,7 +7,10 @@ require (
 	github.com/gorilla/mux v1.8.1
 )
 
-require github.com/felixge/httpsnoop v1.0.3 // indirect
+require (
+	github.com/felixge/httpsnoop v1.0.3 // indirect
+	github.com/h2non/bimg v1.1.9 // indirect
+)
 
 require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect

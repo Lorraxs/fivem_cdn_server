@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"io"
 	"lorraxs/fivem_cdn_server/config"
+	"lorraxs/fivem_cdn_server/utils"
 	"net/http"
 	"os"
 	"path"
@@ -41,6 +42,7 @@ type UploadManifestCollectionItemTexture struct {
 	TextureId string `json:"textureId"`
 	Name      string `json:"name"`
 	Url       string `json:"url"`
+	Size      int    `json:"size"`
 }
 
 type UploadManifestCollectionItem struct {
@@ -86,6 +88,9 @@ func (c *UploadController) Init(ctx context.Context, router *mux.Router) {
 }
 
 func (c *UploadController) GetUploadManifest(w http.ResponseWriter, r *http.Request) {
+
+	collection := r.URL.Query().Get("collection")
+
 	response := UploadManifestResponse{
 		CollectionNum: 0,
 		Collections:   []UploadManifestCollection{},
@@ -111,8 +116,8 @@ func (c *UploadController) GetUploadManifest(w http.ResponseWriter, r *http.Requ
 		name := removedExt(file.Name())
 
 		// Split the file name into parts
-		parts := strings.Split(name, "_")
-		if len(parts) < 5 {
+		parts := strings.Split(name, "-")
+		if len(parts) < 6 {
 			continue
 		}
 
@@ -121,7 +126,17 @@ func (c *UploadController) GetUploadManifest(w http.ResponseWriter, r *http.Requ
 		componentId := parts[len(parts)-3]
 		componentType := parts[len(parts)-4]
 		gender := parts[len(parts)-5]
-		collectionName := strings.Join(parts[:len(parts)-5], "_")
+		collectionName := parts[len(parts)-6]
+
+		if collection != "null" && collection != collectionName {
+			continue
+		}
+
+		fi, err := file.Info()
+
+		if err != nil {
+			continue
+		}
 
 		// Check if the collection already exists
 		var collection *UploadManifestCollection
@@ -163,6 +178,13 @@ func (c *UploadController) GetUploadManifest(w http.ResponseWriter, r *http.Requ
 			}
 		}
 
+		texture := UploadManifestCollectionItemTexture{
+			TextureId: textureId,
+			Name:      name,
+			Url:       path.Join(c.Config.App.BaseUrl, "static", file.Name()),
+			Size:      int(fi.Size()),
+		}
+
 		if item == nil {
 			item = &UploadManifestCollectionItem{
 				CollectionName: collectionName,
@@ -172,15 +194,9 @@ func (c *UploadController) GetUploadManifest(w http.ResponseWriter, r *http.Requ
 				DrawableId:     drawableId,
 				Name:           name,
 				Url:            path.Join(c.Config.App.BaseUrl, "static", file.Name()),
-				Textures:       []UploadManifestCollectionItemTexture{},
+				Textures:       []UploadManifestCollectionItemTexture{texture},
 			}
 			collection.Items = append(collection.Items, *item)
-		}
-
-		texture := UploadManifestCollectionItemTexture{
-			TextureId: textureId,
-			Name:      name,
-			Url:       path.Join(c.Config.App.BaseUrl, "static", file.Name()),
 		}
 
 		item.Textures = append(item.Textures, texture)
@@ -222,6 +238,14 @@ func (c *UploadController) Upload(w http.ResponseWriter, r *http.Request) {
 	// max total size 20mb
 	r.ParseMultipartForm(200 << 20)
 
+	removeBackground := r.URL.Query().Get("rmbg")
+	fileName := r.URL.Query().Get("name")
+
+	if fileName == "" {
+		http.Error(w, "File name is required", http.StatusBadRequest)
+		return
+	}
+
 	secret := r.Header.Get("Secret")
 	fmt.Printf("Secret: %s\n", secret)
 
@@ -256,9 +280,24 @@ func (c *UploadController) Upload(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, errStr, http.StatusInternalServerError)
 			return
 		}
-
+		if removeBackground == "true" {
+			img, err = utils.RemoveGreenBackground(img)
+			if err != nil {
+				errStr := fmt.Sprintf("Error removing the green background. Reason: %s\n", err)
+				fmt.Println(errStr)
+				http.Error(w, errStr, http.StatusInternalServerError)
+				return
+			}
+			/* img, err = utils.TrimImage(img)
+			if err != nil {
+				errStr := fmt.Sprintf("Error trimming the image. Reason: %s\n", err)
+				fmt.Println(errStr)
+				http.Error(w, errStr, http.StatusInternalServerError)
+				return
+			} */
+		}
 		// Create the WebP file
-		webpFilePath := path.Join(c.Config.App.UploadPath, strings.TrimSuffix(h.Filename, ext)+".webp")
+		webpFilePath := path.Join(c.Config.App.UploadPath, fileName+".webp")
 		webpFile, err := os.Create(webpFilePath)
 		if err != nil {
 			errStr := fmt.Sprintf("Error in creating the WebP file. Reason: %s\n", err)
@@ -283,11 +322,11 @@ func (c *UploadController) Upload(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, errStr, http.StatusInternalServerError)
 			return
 		}
-		response.Url = path.Join(c.Config.App.BaseUrl, "static", strings.TrimSuffix(h.Filename, ext)+".webp")
+		response.Url = path.Join(c.Config.App.BaseUrl, "static", fileName+".webp")
 
 	case ".webp", ".jpg", ".jpeg":
 		// Save the file directly
-		saveFilePath := path.Join(c.Config.App.UploadPath, h.Filename)
+		saveFilePath := path.Join(c.Config.App.UploadPath, fileName+ext)
 		saveFile, err := os.Create(saveFilePath)
 		if err != nil {
 			errStr := fmt.Sprintf("Error in creating the file. Reason: %s\n", err)
