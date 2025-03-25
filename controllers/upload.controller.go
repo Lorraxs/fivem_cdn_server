@@ -11,7 +11,6 @@ import (
 	"lorraxs/fivem_cdn_server/utils"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 
@@ -178,10 +177,12 @@ func (c *UploadController) GetUploadManifest(w http.ResponseWriter, r *http.Requ
 			}
 		}
 
+		url := utils.JoinURL(c.Config.App.BaseUrl, "static", file.Name())
+
 		texture := UploadManifestCollectionItemTexture{
 			TextureId: textureId,
 			Name:      name,
-			Url:       path.Join(c.Config.App.BaseUrl, "static", file.Name()),
+			Url:       url,
 			Size:      int(fi.Size()),
 		}
 
@@ -193,7 +194,7 @@ func (c *UploadController) GetUploadManifest(w http.ResponseWriter, r *http.Requ
 				ComponentId:    componentId,
 				DrawableId:     drawableId,
 				Name:           name,
-				Url:            path.Join(c.Config.App.BaseUrl, "static", file.Name()),
+				Url:            url,
 				Textures:       []UploadManifestCollectionItemTexture{texture},
 			}
 			collection.Items = append(collection.Items, *item)
@@ -209,7 +210,7 @@ func (c *UploadController) GetUploadManifest(w http.ResponseWriter, r *http.Requ
 func (c *UploadController) GetStaticFile(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	file := vars["file"]
-	filePath := path.Join(c.Config.App.UploadPath, file)
+	filePath := utils.JoinURL(c.Config.App.UploadPath, file)
 	http.ServeFile(w, r, filePath)
 }
 
@@ -221,7 +222,7 @@ func (c *UploadController) DeleteStaticFile(w http.ResponseWriter, r *http.Reque
 	}
 	vars := mux.Vars(r)
 	file := vars["file"]
-	filePath := path.Join(c.Config.App.UploadPath, file)
+	filePath := utils.JoinURL(c.Config.App.UploadPath, file)
 	err := os.Remove(filePath)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -266,7 +267,7 @@ func (c *UploadController) Upload(w http.ResponseWriter, r *http.Request) {
 		Success:  true,
 		FileName: h.Filename,
 		Message:  "File uploaded successfully",
-		Url:      path.Join(c.Config.App.BaseUrl, "static", h.Filename),
+		Url:      utils.JoinURL(c.Config.App.BaseUrl, "static", h.Filename),
 	}
 
 	ext := strings.ToLower(filepath.Ext(h.Filename))
@@ -297,7 +298,7 @@ func (c *UploadController) Upload(w http.ResponseWriter, r *http.Request) {
 			} */
 		}
 		// Create the WebP file
-		webpFilePath := path.Join(c.Config.App.UploadPath, fileName+".webp")
+		webpFilePath := utils.JoinURL(c.Config.App.UploadPath, fileName+".webp")
 		webpFile, err := os.Create(webpFilePath)
 		if err != nil {
 			errStr := fmt.Sprintf("Error in creating the WebP file. Reason: %s\n", err)
@@ -322,11 +323,11 @@ func (c *UploadController) Upload(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, errStr, http.StatusInternalServerError)
 			return
 		}
-		response.Url = path.Join(c.Config.App.BaseUrl, "static", fileName+".webp")
+		response.Url = utils.JoinURL(c.Config.App.BaseUrl, "static", fileName+".webp")
 
 	case ".webp", ".jpg", ".jpeg":
 		// Save the file directly
-		saveFilePath := path.Join(c.Config.App.UploadPath, fileName+ext)
+		saveFilePath := utils.JoinURL(c.Config.App.UploadPath, fileName+ext)
 		saveFile, err := os.Create(saveFilePath)
 		if err != nil {
 			errStr := fmt.Sprintf("Error in creating the file. Reason: %s\n", err)
@@ -381,7 +382,7 @@ func (c *UploadController) UploadBuffer(w http.ResponseWriter, r *http.Request) 
 		Success:  true,
 		FileName: fileName,
 		Message:  "File uploaded successfully",
-		Url:      path.Join(c.Config.App.BaseUrl, "static", fileName),
+		Url:      utils.JoinURL(c.Config.App.BaseUrl, "static", fileName),
 	}
 
 	// Decode the PNG image
@@ -394,7 +395,7 @@ func (c *UploadController) UploadBuffer(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Create the WebP file
-	webpFilePath := path.Join(c.Config.App.UploadPath, strings.TrimSuffix(fileName, ext)+".webp")
+	webpFilePath := utils.JoinURL(c.Config.App.UploadPath, strings.TrimSuffix(fileName, ext)+".webp")
 	webpFile, err := os.Create(webpFilePath)
 	if err != nil {
 		errStr := fmt.Sprintf("Error in creating the WebP file. Reason: %s\n", err)
@@ -419,7 +420,7 @@ func (c *UploadController) UploadBuffer(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, errStr, http.StatusInternalServerError)
 		return
 	}
-	response.Url = path.Join(c.Config.App.BaseUrl, "static", strings.TrimSuffix(fileName, ext)+".webp")
+	response.Url = utils.JoinURL(c.Config.App.BaseUrl, "static", strings.TrimSuffix(fileName, ext)+".webp")
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
