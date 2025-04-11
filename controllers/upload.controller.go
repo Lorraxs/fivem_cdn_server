@@ -137,6 +137,18 @@ func (c *UploadController) GetUploadManifest(w http.ResponseWriter, r *http.Requ
 			continue
 		}
 
+		if fi.Size() < 1024*4 {
+			if componentType != "prop" && componentId != "2" && componentId != "7" {
+				continue
+			}
+			if fi.Size() == 3904 {
+				continue
+			}
+			if componentType == "component" && componentId == "7" && fi.Size() < 1024 {
+				continue
+			}
+		}
+
 		// Check if the collection already exists
 		var collection *UploadManifestCollection
 		for i := range response.Collections {
@@ -171,7 +183,7 @@ func (c *UploadController) GetUploadManifest(w http.ResponseWriter, r *http.Requ
 		// Check if the item already exists
 		var item *UploadManifestCollectionItem
 		for i := range collection.Items {
-			if collection.Items[i].ComponentId == componentId && collection.Items[i].DrawableId == drawableId && collection.Items[i].Gender == gender {
+			if collection.Items[i].ComponentId == componentId && collection.Items[i].DrawableId == drawableId && collection.Items[i].Gender == gender && collection.Items[i].ComponentType == componentType {
 				item = &collection.Items[i]
 				break
 			}

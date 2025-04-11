@@ -25,10 +25,6 @@ func main() {
 	fmt.Printf("%+v\n", config)
 	router := getRouter()
 
-	/* controllers.NewBanListController().Init(ctx, mongoClient, router)
-	controllers.NewLauncherController().Init(ctx, mongoClient, router)
-	controllers.NewChecksumController().Init(ctx, mongoClient, router) */
-
 	controllers.NewUploadController().Init(ctx, router)
 
 	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -36,7 +32,14 @@ func main() {
 		fmt.Fprint(w, "Hello, World!")
 	})
 
+	// Add CORS middleware
+	corsHandler := handlers.CORS(
+		handlers.AllowedOrigins([]string{"*"}),                                       // Allow all origins
+		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}), // Allow specific methods
+		handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),           // Allow specific headers
+	)
+
 	loggedRouter := handlers.LoggingHandler(os.Stdout, router)
 	log.Info("Starting server on port " + config.Http.Port)
-	http.ListenAndServe(fmt.Sprintf(":%s", config.Http.Port), loggedRouter)
+	http.ListenAndServe(fmt.Sprintf(":%s", config.Http.Port), corsHandler(loggedRouter))
 }
