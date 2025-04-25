@@ -203,12 +203,13 @@ func (c *UploadController) Init(ctx context.Context, router *mux.Router, db *sql
 			http.Error(w, "Invalid componentId parameter", http.StatusBadRequest)
 			return
 		}
-		rd1, err := random.IntRange(0, 100)
+		rd1, err := random.IntRange(0, 10000)
 		if err != nil {
 			http.Error(w, "Error generating random number", http.StatusInternalServerError)
 			return
 		}
-		if rd1 > rateInt {
+		var rd1f float32 = float32(rd1) / 100
+		if rd1f > float32(rateInt) {
 			response.Success = false
 			response.Data = "Rate not met"
 			w.Header().Set("Content-Type", "application/json")
