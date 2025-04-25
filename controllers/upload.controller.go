@@ -72,14 +72,6 @@ type UploadManifestResponse struct {
 	Collections   []UploadManifestCollection `json:"collections"`
 }
 
-type UploadController struct {
-	ctx            context.Context
-	Router         *mux.Router
-	Config         *config.Config
-	DB             *sql.DB
-	CachedClothing []*ClothingItem
-}
-
 type ClothingItem struct {
 	CollectionName string  `json:"cn"`
 	Gender         int     `json:"g"`
@@ -97,6 +89,15 @@ type ClothingPrice struct {
 	Price float64 `json:"price"`
 }
 
+type UploadController struct {
+	ctx                context.Context
+	Router             *mux.Router
+	Config             *config.Config
+	DB                 *sql.DB
+	CachedClothing     []*ClothingItem
+	CachedHashClothing map[string]*ClothingItem
+}
+
 func NewUploadController() *UploadController {
 	return &UploadController{}
 }
@@ -112,6 +113,10 @@ func (c *UploadController) Init(ctx context.Context, router *mux.Router, db *sql
 		return
 	}
 	c.CachedClothing = clothing.([]*ClothingItem)
+	c.CachedHashClothing = make(map[string]*ClothingItem)
+	for _, item := range c.CachedClothing {
+		c.CachedHashClothing[item.Hash] = item
+	}
 	c.Router.HandleFunc("/static/{file}", c.DeleteStaticFile).Methods("DELETE")
 	c.Router.HandleFunc("/upload", c.Upload).Methods("POST")
 	c.Router.HandleFunc("/upload/manifest", c.GetUploadManifest).Methods("GET")
@@ -127,6 +132,9 @@ func (c *UploadController) Init(ctx context.Context, router *mux.Router, db *sql
 			return
 		}
 		c.CachedClothing = clothing.([]*ClothingItem)
+		for _, item := range c.CachedClothing {
+			c.CachedHashClothing[item.Hash] = item
+		}
 	}).Methods("GET")
 	c.Router.HandleFunc("/upload/clothing/update_price", func(w http.ResponseWriter, r *http.Request) {
 		secret := r.Header.Get("Secret")
@@ -156,6 +164,9 @@ func (c *UploadController) Init(ctx context.Context, router *mux.Router, db *sql
 			return
 		}
 		c.CachedClothing = clothing.([]*ClothingItem)
+		for _, item := range c.CachedClothing {
+			c.CachedHashClothing[item.Hash] = item
+		}
 		response := struct {
 			Success bool `json:"success"`
 			Data    any  `json:"data"`
@@ -266,6 +277,7 @@ func (c *UploadController) Init(ctx context.Context, router *mux.Router, db *sql
 	}).Methods("GET")
 
 	c.Router.HandleFunc("/upload-buffer", c.UploadBuffer).Methods("POST")
+	c.Router.HandleFunc("/static/hash/{hash}", c.GetStaticHashedFile).Methods("GET")
 	c.Router.HandleFunc("/static/{file}", c.GetStaticFile).Methods("GET")
 }
 
@@ -587,6 +599,19 @@ func (c *UploadController) GetStaticFile(w http.ResponseWriter, r *http.Request)
 	http.ServeFile(w, r, filePath)
 }
 
+func (c *UploadController) GetStaticHashedFile(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	hash := vars["hash"]
+	if hash == "" {
+		http.Error(w, "Hash is required", http.StatusBadRequest)
+		return
+	}
+	if file, ok := c.CachedHashClothing[hash]; ok {
+		filePath := utils.JoinURL(c.Config.App.UploadPath, fmt.Sprintf("%s-%s-%s-%s-%s-%s.webp", file.CollectionName, strconv.Itoa(file.Gender), file.ComponentType, strconv.Itoa(file.ComponentId), strconv.Itoa(file.DrawableId), strconv.Itoa(file.TextureId)))
+		http.ServeFile(w, r, filePath)
+	}
+}
+
 func (c *UploadController) DeleteStaticFile(w http.ResponseWriter, r *http.Request) {
 	secret := r.Header.Get("Secret")
 	if secret != c.Config.App.Secret {
@@ -727,6 +752,16 @@ func (c *UploadController) Upload(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "Only PNG, JPG, and WebP files are allowed", http.StatusBadRequest)
 		return
+	}
+
+	clothing, err := c.GetClothing("null", true)
+	if err != nil {
+		fmt.Println("Error getting clothing:", err)
+		return
+	}
+	c.CachedClothing = clothing.([]*ClothingItem)
+	for _, item := range c.CachedClothing {
+		c.CachedHashClothing[item.Hash] = item
 	}
 
 	w.WriteHeader(http.StatusOK)
