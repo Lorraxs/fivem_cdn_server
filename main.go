@@ -2,13 +2,16 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"lorraxs/fivem_cdn_server/config"
 	"lorraxs/fivem_cdn_server/controllers"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/charmbracelet/log"
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/handlers"
 )
 
@@ -25,7 +28,24 @@ func main() {
 	fmt.Printf("%+v\n", config)
 	router := getRouter()
 
-	controllers.NewUploadController().Init(ctx, router)
+	db, err := sql.Open("mysql", "nvn:WkCpyyGXCjWJMjDT@tcp(127.0.0.1:3306)/nvn?parseTime=true")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	controllers.NewUploadController().Init(ctx, router, db)
+
+	err = db.Ping()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(25)
+	db.SetConnMaxLifetime(5 * time.Minute)
+
+	fmt.Println("Kết nối MySQL thành công!")
 
 	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf(("%s\n"), r.Header)

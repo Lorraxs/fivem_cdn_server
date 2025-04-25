@@ -4,12 +4,15 @@ go 1.22.3
 
 require (
 	github.com/charmbracelet/log v0.4.0
+	github.com/go-sql-driver/mysql v1.9.2
 	github.com/gorilla/mux v1.8.1
 )
 
 require (
+	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/felixge/httpsnoop v1.0.3 // indirect
 	github.com/h2non/bimg v1.1.9 // indirect
+	github.com/mazen160/go-random v0.0.0-20210308102632-d2b501c85c03 // indirect
 )
 
 require (
@@ -26,5 +29,5 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
 	golang.org/x/sys v0.13.0 // indirect
-	gopkg.in/ini.v1 v1.67.0 // indirect
+	gopkg.in/ini.v1 v1.67.0
 )
