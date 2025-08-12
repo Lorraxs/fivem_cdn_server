@@ -27,7 +27,9 @@ func main() {
 	}
 	fmt.Printf("%+v\n", config)
 	router := getRouter()
-
+	router.Methods("OPTIONS").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
 	db, err := sql.Open("mysql", "nvn:WkCpyyGXCjWJMjDT@tcp(127.0.0.1:3306)/nvn?parseTime=true")
 	if err != nil {
 		log.Fatal(err)

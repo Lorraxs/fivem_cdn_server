@@ -120,6 +120,42 @@ func (c *UploadController) Init(ctx context.Context, router *mux.Router, db *sql
 	c.Router.HandleFunc("/static/{file}", c.DeleteStaticFile).Methods("DELETE")
 	c.Router.HandleFunc("/upload", c.Upload).Methods("POST")
 	c.Router.HandleFunc("/upload/manifest", c.GetUploadManifest).Methods("GET")
+
+	c.Router.HandleFunc("/upload/collection", func(w http.ResponseWriter, r *http.Request) {
+		secret := r.Header.Get("Secret")
+		if secret != c.Config.App.Secret {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		collection := r.URL.Query().Get("collection")
+		if collection == "" {
+			http.Error(w, "Collection name is required", http.StatusBadRequest)
+			return
+		}
+		for _, clothingItem := range c.CachedClothing {
+			if clothingItem.CollectionName == collection {
+				fileName := fmt.Sprintf("%s-%s-%s-%s-%s-%s.webp", clothingItem.CollectionName, strconv.Itoa(clothingItem.Gender), clothingItem.ComponentType, strconv.Itoa(clothingItem.ComponentId), strconv.Itoa(clothingItem.DrawableId), strconv.Itoa(clothingItem.TextureId))
+				filePath := utils.JoinURL(c.Config.App.UploadPath, fileName)
+				err := os.Remove(filePath)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				fmt.Printf("Deleted file: %s\n", filePath)
+				delete(c.CachedHashClothing, clothingItem.Hash)
+			}
+		}
+		clothing, err := c.GetClothing("null", true)
+		if err != nil {
+			http.Error(w, "Error getting clothing", http.StatusInternalServerError)
+			return
+		}
+		c.CachedClothing = clothing.([]*ClothingItem)
+		for _, item := range c.CachedClothing {
+			c.CachedHashClothing[item.Hash] = item
+		}
+	}).Methods("DELETE")
+
 	c.Router.HandleFunc("/upload/clothing/flush_cache", func(w http.ResponseWriter, r *http.Request) {
 		secret := r.Header.Get("Secret")
 		if secret != c.Config.App.Secret {
@@ -181,19 +217,19 @@ func (c *UploadController) Init(ctx context.Context, router *mux.Router, db *sql
 	c.Router.HandleFunc("/upload/clothing/random", func(w http.ResponseWriter, r *http.Request) {
 		componentType := r.URL.Query().Get("componentType")
 		componentId := r.URL.Query().Get("componentId")
-		rate := r.URL.Query().Get("rate")
-		fmt.Printf("componentType: %s, componentId: %s, rate: %s\n", componentType, componentId, rate)
+		ratef := r.URL.Query().Get("rate")
+		fmt.Printf("componentType: %s, componentId: %s, rate: %s\n", componentType, componentId, ratef)
 		response := struct {
 			Success bool `json:"success"`
 			Data    any  `json:"data"`
 		}{
 			Success: false,
 		}
-		if componentType == "" || componentId == "" || rate == "" {
+		if componentType == "" || componentId == "" || ratef == "" {
 			http.Error(w, "Missing required parameters", http.StatusBadRequest)
 			return
 		}
-		rateInt, err := strconv.Atoi(rate)
+		rate, err := strconv.ParseFloat(ratef, 64)
 		if err != nil {
 			http.Error(w, "Invalid rate parameter", http.StatusBadRequest)
 			return
@@ -208,8 +244,9 @@ func (c *UploadController) Init(ctx context.Context, router *mux.Router, db *sql
 			http.Error(w, "Error generating random number", http.StatusInternalServerError)
 			return
 		}
-		var rd1f float32 = float32(rd1) / 100
-		if rd1f > float32(rateInt) {
+		var rd1f float64 = float64(rd1) / 100
+		fmt.Printf("%f - %f", rd1f, rate)
+		if rd1f > rate {
 			response.Success = false
 			response.Data = "Rate not met"
 			w.Header().Set("Content-Type", "application/json")
@@ -394,7 +431,14 @@ func (c *UploadController) GetClothing(collection string, returnSet bool) (inter
 			componentId := parts[len(parts)-3]
 			componentType := parts[len(parts)-4]
 			gender := parts[len(parts)-5]
-			collectionName := parts[len(parts)-6]
+			collectionName := ""
+			collectionPartLen := len(parts) - 6
+			for i := 0; i <= collectionPartLen; i++ {
+				collectionName += parts[i]
+				if i < collectionPartLen {
+					collectionName += "-"
+				}
+			}
 
 			if collection != "null" && collection != collectionName {
 				continue
@@ -406,7 +450,7 @@ func (c *UploadController) GetClothing(collection string, returnSet bool) (inter
 				continue
 			}
 
-			if fi.Size() < 1024*4 {
+			/* if fi.Size() < 1024*4 {
 				if componentType != "prop" && componentId != "2" && componentId != "7" {
 					continue
 				}
@@ -416,7 +460,7 @@ func (c *UploadController) GetClothing(collection string, returnSet bool) (inter
 				if componentType == "component" && componentId == "7" && fi.Size() < 1024 {
 					continue
 				}
-			}
+			} */
 			price := 0.0
 			hash := generateTextureHash(collectionName, componentType, componentId, drawableId, textureId, gender)
 			if priceValue, ok := priceMap[hash]; ok {
@@ -473,7 +517,14 @@ func (c *UploadController) GetClothing(collection string, returnSet bool) (inter
 			componentId := parts[len(parts)-3]
 			componentType := parts[len(parts)-4]
 			gender := parts[len(parts)-5]
-			collectionName := parts[len(parts)-6]
+			collectionName := ""
+			collectionPartLen := len(parts) - 6
+			for i := 0; i <= collectionPartLen; i++ {
+				collectionName += parts[i]
+				if i < collectionPartLen {
+					collectionName += "-"
+				}
+			}
 
 			if collection != "null" && collection != collectionName {
 				continue
@@ -485,7 +536,7 @@ func (c *UploadController) GetClothing(collection string, returnSet bool) (inter
 				continue
 			}
 
-			if fi.Size() < 1024*4 {
+			/* if fi.Size() < 1024*4 {
 				if componentType != "prop" && componentId != "2" && componentId != "7" {
 					continue
 				}
@@ -495,7 +546,7 @@ func (c *UploadController) GetClothing(collection string, returnSet bool) (inter
 				if componentType == "component" && componentId == "7" && fi.Size() < 1024 {
 					continue
 				}
-			}
+			} */
 
 			// Check if the collection already exists
 			var collection *UploadManifestCollection
