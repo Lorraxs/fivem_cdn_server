@@ -16,9 +16,14 @@ type HttpSection struct {
 	Port string `json:"port"`
 }
 
+type MySQLSection struct {
+	Uri string `json:"uri"`
+}
+
 type Config struct {
-	App  AppSection  `json:"app"`
-	Http HttpSection `json:"http"`
+	App   AppSection   `json:"app"`
+	Http  HttpSection  `json:"http"`
+	MySQL MySQLSection `json:"mysql"`
 }
 
 var lock = &sync.Mutex{}
@@ -41,6 +46,8 @@ func loadConfig() *Config {
 	}
 	appSection := iniData.Section("app")
 	httpSection := iniData.Section("http")
+	mysqlSection := iniData.Section("mysql")
+
 	config.App = AppSection{
 		Secret:     appSection.Key("secret").String(),
 		UploadPath: appSection.Key("uploadPath").String(),
@@ -48,6 +55,9 @@ func loadConfig() *Config {
 	}
 	config.Http = HttpSection{
 		Port: httpSection.Key("port").String(),
+	}
+	config.MySQL = MySQLSection{
+		Uri: mysqlSection.Key("uri").String(),
 	}
 	checkConfig(iniData)
 	return config
@@ -97,6 +107,19 @@ func checkConfig(iniData *ini.File) *Config {
 	if config.Http.Port == "" {
 		config.Http.Port = "1107"
 		_, err = httpSection.NewKey("port", "1107")
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	//MySQL
+	mysqlSection, err := iniData.NewSection("mysql")
+	if err != nil {
+		panic(err)
+	}
+	if config.MySQL.Uri == "" {
+		config.MySQL.Uri = "nvn:WkCpyyGXCjWJMjDT@tcp(127.0.0.1:3306)/nvn?parseTime=true"
+		_, err = mysqlSection.NewKey("uri", config.MySQL.Uri)
 		if err != nil {
 			panic(err)
 		}
